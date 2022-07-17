@@ -9,6 +9,8 @@ repositories {
     mavenCentral()
 }
 
+val mingwPath = File(System.getenv("MINGW64_DIR") ?: "C:/msys64/mingw64")
+
 kotlin {
     explicitApi()
 
@@ -27,6 +29,22 @@ kotlin {
         else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
     }
 
+    nativeTarget.apply {
+        compilations["main"].cinterops {
+            val pq by creating {
+                when (preset) {
+                    presets["macosX64"] -> includeDirs.headerFilterOnly("/opt/local/include", "/usr/local/include")
+                    presets["linuxX64"] -> includeDirs.headerFilterOnly("/usr/include", "/usr/include/x86_64-linux-gnu")
+                    presets["mingwX64"] -> includeDirs.headerFilterOnly(mingwPath.resolve("include"))
+                }
+            }
+        }
+        binaries {
+            executable {
+                entryPoint = "main"
+            }
+        }
+    }
     
     sourceSets {
         val commonMain by getting
