@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  postgres:
+    image: 'postgres:14.2-alpine3.15'
+    environment:
+        POSTGRES_USER: 'kefir'
+        POSTGRES_PASSWORD: 'kefir'
+        POSTGRES_DB: 'kefir'
+    ports:
+      - "8570:5432"
