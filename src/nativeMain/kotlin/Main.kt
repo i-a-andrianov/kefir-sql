@@ -1,37 +1,22 @@
-import kotlinx.cinterop.toKString
-import pq.*
 
 public fun main() {
-    println("pq version: ${PQlibVersion()}")
-
-    val conn = PQconnectdb("postgresql://kefir:kefir@localhost:8570/kefir")
-        ?: throw RuntimeException("conn couldn't be established")
-    try {
-        println("conn status: ${PQstatus(conn)}")
-        if (PQstatus(conn) != ConnStatusType.CONNECTION_OK) {
-            throw RuntimeException("error during establishing conn: ${PQerrorMessage(conn)?.toKString()}")
-        }
-        println("DB version: ${PQserverVersion(conn)}")
-        val result = PQexec(conn, "SELECT 1+2")
-            ?: throw RuntimeException("query couldn't be executed")
-        try {
-            println("query status: ${PQresultStatus(result)}")
-            if (PQresultStatus(result) != PGRES_TUPLES_OK) {
-                throw RuntimeException("error during running query: ${PQerrorMessage(conn)?.toKString()}")
+    PostgreSQLConnection("postgresql://kefir:kefir@localhost:8570/kefir").use { conn ->
+        conn.query("SELECT 1+2, $1, null, '{\"hello\":\"world\"}'::jsonb", "abc").use { result ->
+            for ((idx, row) in result.withIndex()) {
+                println("number of columns: #${row.columns()}")
+                println("int[$idx, 0]: ${row.getInt(0)}")
+                println("string[$idx, 1]: ${row.getString(1)}")
+                println("int[$idx, 2]: ${row.getInt(2)}")
+                println("string[$idx, 2]: ${row.getString(2)}")
+                println("string[$idx, 3]: ${row.getString(3)}")
             }
-            println("number of rows: #${PQntuples(result)}")
-            println("number of columns: #${PQnfields(result)}")
-            for (row in 0 until PQntuples(result)) {
-                for (column in 0 until PQnfields(result)) {
-                    println("value [$row, $column]: ${PQgetvalue(result, row, column)?.toKString()}")
-                    println("type [$row, $column]: ${PQparamtype(result, column)}")
-                    println("is null [$row, $column]: ${PQgetisnull(result, row, column)}")
-                }
-            }
-        } finally {
-            PQclear(result)
         }
-    } finally {
-        PQfinish(conn)
+        conn.query("CREATE TABLE xyz(id serial PRIMARY KEY, name varchar(128))").use {}
+        conn.query("INSERT INTO xyz(name) VALUES($1) RETURNING id, name, 40+2", "abc").use { result ->
+            println("id=${result.iterator().next().getInt(0)}")
+            println("name=${result.iterator().next().getString(1)}")
+            println("40+2=${result.iterator().next().getInt(2)}")
+        }
+        conn.query("DROP TABLE xyz").use {}
     }
 }
