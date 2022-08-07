@@ -1,11 +1,29 @@
-import kotlinx.cinterop.*
-import pq.*
+package org.kefir.sql.libpq
 
-public class PostgreSQLQueryResult internal constructor(
+import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.toCStringArray
+import kotlinx.cinterop.toKString
+import kotlinx.cinterop.value
+import org.kefir.sql.QueryResult
+import org.kefir.sql.QueryResultRow
+import org.kefir.sql.libpq.cinterop.OidVar
+import org.kefir.sql.libpq.cinterop.PGRES_COMMAND_OK
+import org.kefir.sql.libpq.cinterop.PGRES_TUPLES_OK
+import org.kefir.sql.libpq.cinterop.PGconn
+import org.kefir.sql.libpq.cinterop.PGresult
+import org.kefir.sql.libpq.cinterop.PQclear
+import org.kefir.sql.libpq.cinterop.PQerrorMessage
+import org.kefir.sql.libpq.cinterop.PQexecParams
+import org.kefir.sql.libpq.cinterop.PQntuples
+import org.kefir.sql.libpq.cinterop.PQresultStatus
+
+internal class PostgreSQLQueryResult(
     conn: CPointer<PGconn>,
     queryString: String,
     params: Array<out Any>
-) : Iterable<PostgreSQLQueryResultRow>, Closeable {
+) : QueryResult {
     private val result: CPointer<PGresult>
 
     init {
@@ -32,12 +50,16 @@ public class PostgreSQLQueryResult internal constructor(
 
     // TODO use "SELECT oid, typname FROM pg_type" query
     private fun toOid(value: Any) = when (value) {
+        is Boolean -> 16U
         is Int -> 23U
-        is String -> 1043U
-        else -> throw RuntimeException("Unsupported data type for value: $value")
+        is Long -> 20U
+        is Float -> 700U
+        is Double -> 701U
+        is String -> 25U
+        else -> throw IllegalArgumentException("Unsupported data type for value: $value")
     }
 
-    override fun iterator(): Iterator<PostgreSQLQueryResultRow> = ResultIterator()
+    override fun iterator(): Iterator<QueryResultRow> = ResultIterator()
 
     private inner class ResultIterator : Iterator<PostgreSQLQueryResultRow> {
         private var row = 0
@@ -52,7 +74,7 @@ public class PostgreSQLQueryResult internal constructor(
         }
     }
 
-    public override fun close() {
+    override fun close() {
         PQclear(result)
     }
 }

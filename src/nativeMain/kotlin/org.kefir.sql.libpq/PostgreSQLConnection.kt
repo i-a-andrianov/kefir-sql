@@ -1,8 +1,20 @@
+package org.kefir.sql.libpq
+
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.toKString
-import pq.*
+import org.kefir.sql.Connection
+import org.kefir.sql.QueryResult
+import org.kefir.sql.libpq.cinterop.ConnStatusType
+import org.kefir.sql.libpq.cinterop.PGconn
+import org.kefir.sql.libpq.cinterop.PQconnectdb
+import org.kefir.sql.libpq.cinterop.PQerrorMessage
+import org.kefir.sql.libpq.cinterop.PQfinish
+import org.kefir.sql.libpq.cinterop.PQlibVersion
+import org.kefir.sql.libpq.cinterop.PQreset
+import org.kefir.sql.libpq.cinterop.PQserverVersion
+import org.kefir.sql.libpq.cinterop.PQstatus
 
-public class PostgreSQLConnection(url: String): Closeable {
+internal class PostgreSQLConnection(url: String) : Connection {
     private val conn: CPointer<PGconn>
 
     init {
@@ -19,7 +31,7 @@ public class PostgreSQLConnection(url: String): Closeable {
         println("PostgreSQL version: ${PQserverVersion(conn)}")
     }
 
-    public fun query(queryString: String, vararg params: Any): PostgreSQLQueryResult {
+    override fun query(queryString: String, vararg params: Any): QueryResult {
         if (PQstatus(conn) != ConnStatusType.CONNECTION_OK) {
             PQreset(conn)
         }
@@ -29,7 +41,7 @@ public class PostgreSQLConnection(url: String): Closeable {
         return PostgreSQLQueryResult(conn, queryString, params)
     }
 
-    public override fun close() {
+    override fun close() {
         PQfinish(conn)
     }
 }

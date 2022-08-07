@@ -2,6 +2,8 @@ plugins {
     kotlin("multiplatform") version "1.7.10"
 }
 
+val kotestVersion = "5.4.1"
+
 group = "org.kefir.sql"
 version = "0.0.1"
 
@@ -48,7 +50,11 @@ kotlin {
     
     sourceSets {
         val commonMain by getting
-        val commonTest by getting
+        val commonTest by getting {
+            dependencies {
+                implementation("io.kotest:kotest-assertions-core:$kotestVersion")
+            }
+        }
         val jvmMain by getting
         val jvmTest by getting
         val nativeMain by getting
