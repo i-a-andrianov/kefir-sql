@@ -4,6 +4,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.kefir.sql.ColumnIndexOutOfBoundsException
+import org.kefir.sql.ColumnNameNotFoundException
 import org.kefir.sql.ColumnWrongTypeException
 import org.kefir.sql.Connection
 import org.kefir.sql.getBoolean
@@ -97,6 +98,23 @@ class PostgreSQLConnectionTest {
     }
 
     @Test
+    fun `should correctly handle named booleans in query result`() {
+        connection.query("SELECT true AS b1, false AS b2").use { result ->
+            val row = result.toList()[0]
+
+            row.getBoolean("b1") shouldBe true
+            shouldThrow<ColumnWrongTypeException> { row.getInt("b1") }
+            shouldThrow<ColumnWrongTypeException> { row.getLong("b1") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("b1") }
+
+            row.getBoolean("b2") shouldBe false
+            shouldThrow<ColumnWrongTypeException> { row.getInt("b2") }
+            shouldThrow<ColumnWrongTypeException> { row.getLong("b2") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("b2") }
+        }
+    }
+
+    @Test
     fun `should correctly handle ints in query result`() {
         connection.query("SELECT 123::integer").use { result ->
             val row = result.toList()[0]
@@ -105,6 +123,18 @@ class PostgreSQLConnectionTest {
             shouldThrow<ColumnWrongTypeException> { row.getBoolean(0) }
             shouldThrow<ColumnWrongTypeException> { row.getLong(0) }
             shouldThrow<ColumnWrongTypeException> { row.getString(0) }
+        }
+    }
+
+    @Test
+    fun `should correctly handle named ints in query result`() {
+        connection.query("SELECT 123::integer AS i").use { result ->
+            val row = result.toList()[0]
+
+            row.getInt("i") shouldBe 123
+            shouldThrow<ColumnWrongTypeException> { row.getBoolean("i") }
+            shouldThrow<ColumnWrongTypeException> { row.getLong("i") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("i") }
         }
     }
 
@@ -121,6 +151,18 @@ class PostgreSQLConnectionTest {
     }
 
     @Test
+    fun `should correctly handle named longs in query result`() {
+        connection.query("SELECT 5678901234::bigint AS l").use { result ->
+            val row = result.toList()[0]
+
+            row.getLong("l") shouldBe 5678901234
+            shouldThrow<ColumnWrongTypeException> { row.getBoolean("l") }
+            shouldThrow<ColumnWrongTypeException> { row.getInt("l") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("l") }
+        }
+    }
+
+    @Test
     fun `should correctly handle floats in query result`() {
         connection.query("SELECT 12.34::float4").use { result ->
             val row = result.toList()[0]
@@ -129,6 +171,18 @@ class PostgreSQLConnectionTest {
             shouldThrow<ColumnWrongTypeException> { row.getInt(0) }
             shouldThrow<ColumnWrongTypeException> { row.getDouble(0) }
             shouldThrow<ColumnWrongTypeException> { row.getString(0) }
+        }
+    }
+
+    @Test
+    fun `should correctly handle named floats in query result`() {
+        connection.query("SELECT 12.34::float4 AS f").use { result ->
+            val row = result.toList()[0]
+
+            row.getFloat("f") shouldBe 12.34F
+            shouldThrow<ColumnWrongTypeException> { row.getInt("f") }
+            shouldThrow<ColumnWrongTypeException> { row.getDouble("f") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("f") }
         }
     }
 
@@ -145,6 +199,18 @@ class PostgreSQLConnectionTest {
     }
 
     @Test
+    fun `should correctly handle named doubles in query result`() {
+        connection.query("SELECT 56.78::float8 AS d").use { result ->
+            val row = result.toList()[0]
+
+            row.getDouble("d") shouldBe 56.78
+            shouldThrow<ColumnWrongTypeException> { row.getLong("d") }
+            shouldThrow<ColumnWrongTypeException> { row.getFloat("d") }
+            shouldThrow<ColumnWrongTypeException> { row.getString("d") }
+        }
+    }
+
+    @Test
     fun `should correctly process strings in query result`() {
         connection.query("SELECT 'abc'::varchar").use { result ->
             val row = result.toList()[0]
@@ -153,6 +219,18 @@ class PostgreSQLConnectionTest {
             shouldThrow<ColumnWrongTypeException> { row.getBoolean(0) }
             shouldThrow<ColumnWrongTypeException> { row.getInt(0) }
             shouldThrow<ColumnWrongTypeException> { row.getLong(0) }
+        }
+    }
+
+    @Test
+    fun `should correctly process named strings in query result`() {
+        connection.query("SELECT 'abc'::varchar AS s").use { result ->
+            val row = result.toList()[0]
+
+            row.getString("s") shouldBe "abc"
+            shouldThrow<ColumnWrongTypeException> { row.getBoolean("s") }
+            shouldThrow<ColumnWrongTypeException> { row.getInt("s") }
+            shouldThrow<ColumnWrongTypeException> { row.getLong("s") }
         }
     }
 
@@ -169,7 +247,31 @@ class PostgreSQLConnectionTest {
     }
 
     @Test
-    fun `should return given parameters for the same query`() {
+    fun `should correctly process named nulls in query result`() {
+        connection.query("SELECT null::text AS n").use { result ->
+            val row = result.toList()[0]
+
+            row.getString("n") shouldBe null
+            shouldThrow<ColumnWrongTypeException> { row.getBoolean("n") }
+            shouldThrow<ColumnWrongTypeException> { row.getInt("n") }
+            shouldThrow<ColumnWrongTypeException> { row.getLong("n") }
+        }
+    }
+
+    @Test
+    fun `should throw ColumnNameNotFoundException if given column name is not in query`() {
+        connection.query("SELECT 0 AS i, false AS b, 'xyz' AS s").use { result ->
+            val row = result.iterator().next()
+
+            shouldThrow<ColumnNameNotFoundException> { row.getBoolean("a") }
+            shouldThrow<ColumnNameNotFoundException> { row.getInt("a") }
+            shouldThrow<ColumnNameNotFoundException> { row.getLong("a") }
+            shouldThrow<ColumnNameNotFoundException> { row.getString("a") }
+        }
+    }
+
+    @Test
+    fun `should always return given parameters for the same query`() {
         val queryString = "SELECT $1::int, $2::varchar"
         connection.query(queryString, 123, "abc").use { result ->
             val row = result.toList()[0]
@@ -182,6 +284,17 @@ class PostgreSQLConnectionTest {
 
             row.getInt(0) shouldBe 456
             row.getString(1) shouldBe "def"
+        }
+    }
+
+    @Test
+    fun `should correctly process out-of-order parameters`() {
+        val queryString = "SELECT $2::int, $1::varchar"
+        connection.query(queryString,"abc", 123).use { result ->
+            val row = result.toList()[0]
+
+            row.getInt(0) shouldBe 123
+            row.getString(1) shouldBe "abc"
         }
     }
 

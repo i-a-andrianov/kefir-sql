@@ -3,9 +3,11 @@ package org.kefir.sql.libpq
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.toKString
 import org.kefir.sql.ColumnIndexOutOfBoundsException
+import org.kefir.sql.ColumnNameNotFoundException
 import org.kefir.sql.ColumnWrongTypeException
 import org.kefir.sql.QueryResultRow
 import org.kefir.sql.libpq.cinterop.PGresult
+import org.kefir.sql.libpq.cinterop.PQfnumber
 import org.kefir.sql.libpq.cinterop.PQftype
 import org.kefir.sql.libpq.cinterop.PQgetisnull
 import org.kefir.sql.libpq.cinterop.PQgetvalue
@@ -18,17 +20,23 @@ internal class PostgreSQLQueryResultRow(
 ) : QueryResultRow {
     override fun columns(): Int = PQnfields(result)
 
-    override fun <T : Any> getValue(column: Int, type: KClass<T>): T? {
-        if (column < 0) throw ColumnIndexOutOfBoundsException("column $column should be non-negative")
-        if (column >= columns()) throw ColumnIndexOutOfBoundsException("column $column is too large: ${columns()} available")
+    override fun <T : Any> getValue(columnIndex: Int, type: KClass<T>): T? {
+        if (columnIndex < 0) throw ColumnIndexOutOfBoundsException("column $columnIndex should be non-negative")
+        if (columnIndex >= columns()) throw ColumnIndexOutOfBoundsException("column $columnIndex is too large: ${columns()} available")
 
-        val rawValue = getRawValue(column)
+        val rawValue = getRawValue(columnIndex)
 
-        val columnType = getType(column)
-        if (columnType != type) throw ColumnWrongTypeException("column $column isn't $type but $columnType")
+        val columnType = getType(columnIndex)
+        if (columnType != type) throw ColumnWrongTypeException("column $columnIndex isn't $type but $columnType")
 
         if (rawValue != null) return map(rawValue, type)
         return null
+    }
+
+    override fun <T : Any> getValue(columnName: String, type: KClass<T>): T? {
+        val columnIndex = PQfnumber(result, columnName)
+        if (columnIndex < 0) throw ColumnNameNotFoundException("column $columnName is not found in query result")
+        return getValue(columnIndex, type)
     }
 
     private fun getRawValue(column: Int): String? {
