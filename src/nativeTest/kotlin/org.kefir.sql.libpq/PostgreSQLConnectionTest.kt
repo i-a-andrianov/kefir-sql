@@ -52,6 +52,14 @@ class PostgreSQLConnectionTest {
     }
 
     @Test
+    fun `should return zero rows for condition which is never true`() {
+        connection.query("SELECT 1 WHERE 2 = 3").use { result ->
+            val rows = result.toList()
+            rows shouldHaveSize 0
+        }
+    }
+
+    @Test
     fun `should correctly determine number of columns in query result`() {
         connection.query("SELECT 1, true, 'abc'").use { result ->
             val row = result.iterator().next()
@@ -157,6 +165,128 @@ class PostgreSQLConnectionTest {
             shouldThrow<ColumnWrongTypeException> { row.getBoolean(0) }
             shouldThrow<ColumnWrongTypeException> { row.getInt(0) }
             shouldThrow<ColumnWrongTypeException> { row.getLong(0) }
+        }
+    }
+
+    @Test
+    fun `should return given parameters for the same query`() {
+        val queryString = "SELECT $1::int, $2::varchar"
+        connection.query(queryString, 123, "abc").use { result ->
+            val row = result.toList()[0]
+
+            row.getInt(0) shouldBe 123
+            row.getString(1) shouldBe "abc"
+        }
+        connection.query(queryString, 456, "def").use { result ->
+            val row = result.toList()[0]
+
+            row.getInt(0) shouldBe 456
+            row.getString(1) shouldBe "def"
+        }
+    }
+
+    @Test
+    fun `should correctly determine number of rows affected by select`() {
+        connection.query("SELECT 1 UNION SELECT 2").use { result ->
+            result.rowsAffected() shouldBe 2
+        }
+    }
+
+    @Test
+    fun `should have two rows affected for double insert`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1),($2)", "abc", "def").use { result ->
+                result.rowsAffected() shouldBe 2
+            }
+        }
+    }
+
+    @Test
+    fun `should have zero rows affected by update of empty table`() {
+        shouldBeForTableXyz {
+            connection.query("UPDATE xyz SET name = $1 WHERE id = $2", "def", 1).use { result ->
+                result.rowsAffected() shouldBe 0
+            }
+        }
+    }
+
+    @Test
+    fun `should have zero rows affected by non-matching update`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("UPDATE xyz SET name = $1 WHERE id = $2", "def", 100).use { result ->
+                result.rowsAffected() shouldBe 0
+            }
+        }
+    }
+
+    @Test
+    fun `should have one row affected by matching update`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("UPDATE xyz SET name = $1 WHERE id = $2", "def", 1).use { result ->
+                result.rowsAffected() shouldBe 1
+            }
+        }
+    }
+
+    @Test
+    fun `should have two rows affected by full update`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "def").use {}
+            connection.query("UPDATE xyz SET name = $1", "ghi").use { result ->
+                result.rowsAffected() shouldBe 2
+            }
+        }
+    }
+
+    @Test
+    fun `should have zero rows affected by delete on empty table`() {
+        shouldBeForTableXyz {
+            connection.query("DELETE FROM xyz WHERE id=$1", 1).use { result ->
+                result.rowsAffected() shouldBe 0
+            }
+        }
+    }
+
+    @Test
+    fun `should have zero rows affected by non-matching delete`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("DELETE FROM xyz WHERE id=$1", 100).use { result ->
+                result.rowsAffected() shouldBe 0
+            }
+        }
+    }
+
+    @Test
+    fun `should have one row affected by matching delete`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("DELETE FROM xyz WHERE id=$1", 1).use { result ->
+                result.rowsAffected() shouldBe 1
+            }
+        }
+    }
+
+    @Test
+    fun `should have two rows affected by full table delete`() {
+        shouldBeForTableXyz {
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "abc").use {}
+            connection.query("INSERT INTO xyz(name) VALUES($1)", "def").use {}
+            connection.query("DELETE FROM xyz", 1).use { result ->
+                result.rowsAffected() shouldBe 2
+            }
+        }
+    }
+
+    private fun shouldBeForTableXyz(assertions: () -> Unit) {
+        connection.query("CREATE TABLE xyz(id serial PRIMARY KEY, name varchar(128))").use {  }
+        try {
+            assertions()
+        } finally {
+            connection.query("DROP TABLE xyz").use {  }
         }
     }
 }
